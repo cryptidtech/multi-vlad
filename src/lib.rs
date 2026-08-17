@@ -71,7 +71,8 @@
 //! ## Features
 //!
 //! - **`serde`** (default): Enables serde serialization for `Vlad`.
-//! - **`dag_cbor`**: Enables CBOR support for `Vlad` via `multi-cbor`.
+//! - **`dag_cbor`** (default): Enables CBOR support for `Vlad` via `multi-cbor`.
+//! - **`xmss`** (default): Enables XMSS post-quantum signature support via `multi-key`.
 
 #![warn(missing_docs)]
 #![deny(

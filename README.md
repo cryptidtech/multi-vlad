@@ -83,6 +83,7 @@ assert_eq!(vlad, decoded);
 |---|---|---|
 | `serde` | yes | Enables serde serialization for `Vlad`. |
 | `dag_cbor` | yes | Enables CBOR support for `Vlad` via `multi-cbor`. |
+| `xmss` | yes | Enables XMSS post-quantum signature support via `multi-key`. |
 
 ## Examples
 
@@ -91,7 +92,10 @@ assert_eq!(vlad, decoded);
   cargo run --example ed25519
   ```
 
-- `examples/lamport.rs` — Build and verify a Vlad with a Lamport-SHA3-256 ephemeral key pair. Lamport keys are one-time, which is a natural fit for a Vlad (it signs exactly one message). This example is `no_run` because the published `multi-key` crate does not yet include the Lamport signing view. When the Lamport view ships, the example will compile and run unchanged.
+- `examples/xmss.rs` — Build and verify a Vlad with an XMSS-SHA2_10_256 post-quantum ephemeral key pair. XMSS is a stateful hash-based scheme: a single key can sign a bounded number of messages (2^h for height h), which is necessary for a Vlad because the same ephemeral key must sign both the Vlad and the first provenance-log entry. Runnable:
+  ```bash
+  cargo run --example xmss
+  ```
 
 ## The Split from `bs-multicid`
 

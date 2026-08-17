@@ -5,7 +5,7 @@ use multi_base::Base;
 use multi_codec::Codec;
 use multi_key::{Multikey, Views};
 use multi_sig::Multisig;
-use multi_trait::{EncodeInto, Null, TryDecodeFrom};
+use multi_trait::{EncodeInto, EncodeIntoBuffer, Null, TryDecodeFrom};
 use multi_util::{BaseEncoded, CodecInfo, DetectedEncoder, EncodingInfo};
 
 /// the Vlad multicodec sigil
@@ -168,6 +168,12 @@ impl From<Vlad> for Vec<u8> {
 impl EncodeInto for Vlad {
     fn encode_into(&self) -> Vec<u8> {
         self.clone().into()
+    }
+}
+
+impl EncodeIntoBuffer for Vlad {
+    fn encode_into_buffer(&self, buffer: &mut Vec<u8>) {
+        buffer.extend_from_slice(&self.clone().encode_into());
     }
 }
 
