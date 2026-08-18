@@ -49,7 +49,7 @@ Add this to your `Cargo.toml`:
 multi-vlad = "0.1"
 ```
 
-MSRV: Rust 1.87 (required by `multi-key`).
+MSRV: Rust 1.95 (required by `multi-key`).
 
 ## Usage
 

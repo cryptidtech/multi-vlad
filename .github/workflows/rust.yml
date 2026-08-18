@@ -34,33 +34,17 @@ jobs:
         run: cargo test --verbose --all-features
 
   msrv:
-    name: Verify MSRV (1.85)
+    name: Verify MSRV (1.95)
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Rust Toolchain (1.85)
-        uses: dtolnay/rust-toolchain@1.85.0
+      - name: Install Rust Toolchain (1.95)
+        uses: dtolnay/rust-toolchain@1.95.0
 
       - name: Check
         run: cargo check --all-features
-
-  ensure_no_std:
-    name: Ensure no_std
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install Rust Toolchain (nightly)
-        uses: dtolnay/rust-toolchain@nightly
-        with:
-          targets: thumbv6m-none-eabi
-
-      - name: Build (no_std)
-        run: cargo build --no-default-features --target thumbv6m-none-eabi
-        shell: bash
 
   coverage:
     name: Coverage

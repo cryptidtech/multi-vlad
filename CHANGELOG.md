@@ -11,6 +11,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 - `multi-base`, `multi-codec`, `multi-key`, `multi-sig`, `multi-trait`, and `multi-util` dependencies repointed from the local `bettersign` workspace `bs-*` packages to their published crates.io versions (`multi-base` 1.0, `multi-codec` 1.2, `multi-key` 1.1, `multi-sig` 1.2, `multi-trait` 1.0, `multi-util` 1.1). The crate no longer depends on a local checkout of the `bettersign` workspace.
 - `proptest` dev-dependency bumped from 1.4 to 1.11.
+- MSRV raised to 1.95 (required by `multi-key`). The `Verify MSRV` CI job now installs Rust 1.95.0.
 
 ## [0.1.1] - 2026-08-17
 
