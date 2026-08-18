@@ -5,6 +5,13 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.2] - 2026-08-18
+
+### Changed
+
+- `multi-base`, `multi-codec`, `multi-key`, `multi-sig`, `multi-trait`, and `multi-util` dependencies repointed from the local `bettersign` workspace `bs-*` packages to their published crates.io versions (`multi-base` 1.0, `multi-codec` 1.2, `multi-key` 1.1, `multi-sig` 1.2, `multi-trait` 1.0, `multi-util` 1.1). The crate no longer depends on a local checkout of the `bettersign` workspace.
+- `proptest` dev-dependency bumped from 1.4 to 1.11.
+
 ## [0.1.1] - 2026-08-17
 
 ### Added
@@ -57,5 +64,6 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 - The `multi-base`, `multi-codec`, `multi-key`, `multi-sig`, `multi-trait`, and `multi-util` dependencies use the published crates.io versions. `multi-vlad` does not declare `multi-hash` as a dependency; it appears transitively via `multi-key`.
 
+[0.1.2]: https://github.com/cryptidtech/multi-vlad/releases/tag/v0.1.2
 [0.1.1]: https://github.com/cryptidtech/multi-vlad/releases/tag/v0.1.1
 [0.1.0]: https://github.com/cryptidtech/multi-vlad/releases/tag/v0.1.0

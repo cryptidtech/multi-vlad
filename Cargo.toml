@@ -1,6 +1,6 @@
 [package]
 name = "multi-vlad"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2021"
 rust-version = "1.87"
 authors = ["Dave Grantham <dwg@linuxprogrammer.org>"]
@@ -17,12 +17,12 @@ dag_cbor = ["dep:multi-cbor", "multi-cbor/tags"]
 xmss = ["multi-key/xmss"]
 
 [dependencies]
-multi-base = { package = "bs-multibase", version = "0.7.0", path = "../bettersign/crates/multibase", default-features = false }
-multi-codec = { package = "bs-multicodec", version = "0.7.0", path = "../bettersign/crates/multicodec" }
-multi-key = { path = "../multi-key" }
-multi-sig = { path = "../multi-sig" }
-multi-trait = { package = "bs-multitrait", version = "0.7.0", path = "../bettersign/crates/multitrait", default-features = false }
-multi-util = { package = "bs-multiutil", version = "0.7.0", path = "../bettersign/crates/multiutil" }
+multi-base = { version = "1.0", default-features = false }
+multi-codec = "1.2"
+multi-key = "1.1"
+multi-sig = "1.2"
+multi-trait = { version = "1.0", default-features = false }
+multi-util = "1.1"
 thiserror = "2.0"
 serde = { version = "1.0", default-features = false, features = [
   "alloc",
@@ -33,7 +33,7 @@ multi-cbor = { version = "0.1", path = "../multi-cbor", optional = true }
 [dev-dependencies]
 criterion = "0.8"
 multi-cbor = { version = "0.1", path = "../multi-cbor" }
-proptest = "1.4"
+proptest = "1.11"
 rand = "0.10"
 serde_json = "1.0"
 
