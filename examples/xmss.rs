@@ -9,8 +9,10 @@
 //! (h=10) can sign up to 1024 messages per key, which is sufficient for the
 //! Vlad plus its first plog entry.
 //!
-//! Lamport keys are one-time (one signature per key) and cannot be used for a
-//! Vlad, which requires at least two signatures from the same ephemeral key.
+//! One-time Lamport keys cannot be used for a Vlad, which requires at least
+//! two signatures from the same ephemeral key. Merkle-tree Lamport
+//! (`lamport-merkle-blake3-256`) can: its depth-1 tree holds exactly two
+//! one-time leaves. See the `lamport_merkle` example.
 //!
 //! See the `ed25519` example for an equivalent with Ed25519.
 

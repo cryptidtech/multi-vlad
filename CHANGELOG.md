@@ -5,6 +5,25 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2026-09-01
+
+### Added
+
+- `Builder::try_build_advance` and `Builder::try_build_advance_encoded` for stateful signature schemes. They sign the WASM first-lock script with `SignView::sign_advance` and return the Vlad (or encoded Vlad) AND the advanced `Multikey`. The caller must persist the advanced key so the consumed one-time slot is never reused. The advanced key verifies the Vlad exactly like the original key (the merkle root does not change on advance). Plain `try_build`/`try_build_encoded` are unchanged and keep working for stateless keys (Ed25519, XMSS).
+- `examples/lamport_merkle.rs` — build and verify a Vlad with a merkle-tree Lamport `lamport-merkle-blake3-256` ephemeral key at depth 1 (two one-time leaves: one for the Vlad, one for the first provenance-log entry), using `try_build_advance`.
+- Three tests covering the merkle flow: sign/verify with both keys plus state introspection, tree exhaustion after two signatures (and the `UnsupportedAlgorithm` error from the stateless path), and rejection of a tampered depth attribute.
+
+### Changed
+
+- Updated dependencies: `multi-codec` 1.2 → 1.3, `multi-key` 1.1 → 1.2, `multi-sig` 1.2 → 1.3.
+- Raised `rust-version` from 1.95 to 1.96 (required by `multi-key` 1.2 / `lamport_signature_plus` 0.5.0) and updated the CI MSRV job to 1.96.
+- `examples/xmss.rs` doc comment updated: one-time Lamport cannot sign a Vlad, but merkle-tree Lamport can.
+- README updated: `lamport-merkle-blake3-256` at depth 1 documented as the recommended ephemeral key type.
+
+### Notes
+
+- Merkle-tree Lamport keys (`LamportMerkle*Priv`) reject `Builder::try_build` by design: `SignView::sign` errors with `UnsupportedAlgorithm` and directs the caller to `try_build_advance`, which returns the advanced key state for persistence.
+
 ## [0.1.2] - 2026-08-18
 
 ### Changed
@@ -65,6 +84,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 - The `multi-base`, `multi-codec`, `multi-key`, `multi-sig`, `multi-trait`, and `multi-util` dependencies use the published crates.io versions. `multi-vlad` does not declare `multi-hash` as a dependency; it appears transitively via `multi-key`.
 
+[0.2.0]: https://github.com/cryptidtech/multi-vlad/compare/v0.1.2...v0.2.0
 [0.1.2]: https://github.com/cryptidtech/multi-vlad/releases/tag/v0.1.2
 [0.1.1]: https://github.com/cryptidtech/multi-vlad/releases/tag/v0.1.1
 [0.1.0]: https://github.com/cryptidtech/multi-vlad/releases/tag/v0.1.0
