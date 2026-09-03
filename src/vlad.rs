@@ -271,6 +271,44 @@ impl Builder {
         let ms = sv.sign(msg, true, None)?;
         Ok(Vlad(ms))
     }
+
+    /// build the vlad with a stateful signing key, returning the vlad AND the
+    /// advanced key state
+    ///
+    /// Stateful signature schemes (merkle-tree Lamport, XMSS) consume a
+    /// one-time slot per signature. The caller MUST persist the returned
+    /// advanced key so the consumed slot is never reused. The advanced key
+    /// verifies the vlad just like the original key (the tree root does not
+    /// change when the state advances).
+    ///
+    /// Stateless keys return an error: use [`try_build`](Self::try_build).
+    pub fn try_build_advance(&self) -> Result<(Vlad, Multikey), Error> {
+        let mk = self.mk.as_ref().ok_or(VladError::MissingSigningKey)?;
+        let msg = self.message.as_ref().ok_or(VladError::MissingMessage)?;
+        // validate message is WASM binary before signing
+        if msg.len() < 4 || msg[..4] != WASM_MAGIC {
+            return Err(VladError::InvalidWasm.into());
+        }
+        let sv = mk.sign_view()?;
+        // combined=true: message is stored inside the Multisig
+        let (ms, advanced) = sv.sign_advance(msg, true, None)?;
+        Ok((Vlad(ms), advanced))
+    }
+
+    /// build a base encoded vlad with a stateful signing key, returning the
+    /// encoded vlad AND the advanced key state
+    ///
+    /// See [`try_build_advance`](Self::try_build_advance).
+    pub fn try_build_advance_encoded(&self) -> Result<(EncodedVlad, Multikey), Error> {
+        let (vlad, advanced) = self.try_build_advance()?;
+        Ok((
+            EncodedVlad::new(
+                self.base_encoding.unwrap_or_else(Vlad::preferred_encoding),
+                vlad,
+            ),
+            advanced,
+        ))
+    }
 }
 
 #[cfg(test)]
@@ -564,5 +602,110 @@ mod tests {
 
         // 6. the message() accessor returns the same bytes as wasm()
         assert_eq!(vlad.message(), vlad.wasm());
+    }
+
+    #[test]
+    fn test_merkle_vlad_sign_and_verify() {
+        let mut rng = rand::rng();
+        let mk = multi_key::Builder::new_from_random_bytes_with_depth(
+            Codec::LamportMerkleBlake3256Priv,
+            1,
+            &mut rng,
+        )
+        .unwrap()
+        .try_build()
+        .unwrap();
+        let msg = test_wasm_message();
+
+        let (vlad, advanced) = Builder::default()
+            .with_signing_key(&mk)
+            .with_message(&msg)
+            .try_build_advance()
+            .unwrap();
+
+        // structure checks
+        vlad.validate().unwrap();
+        assert_eq!(vlad.wasm(), msg.as_slice());
+
+        // the signature carries the depth attribute
+        let ms = vlad.multisig();
+        assert_eq!(ms.depth(), Some(1));
+
+        // both the original and the advanced key verify (same tree root)
+        vlad.verify(&mk).unwrap();
+        vlad.verify(&advanced).unwrap();
+
+        // round-trip through bytes and re-verify with the advanced key
+        let bytes: Vec<u8> = vlad.clone().into();
+        let decoded = Vlad::try_from(bytes.as_ref()).unwrap();
+        assert_eq!(vlad, decoded);
+        decoded.validate().unwrap();
+        decoded.verify(&advanced).unwrap();
+
+        // the advanced key consumed leaf 0 of the 2-leaf tree
+        let mv = advanced.merkle_state_view().unwrap();
+        assert_eq!(mv.depth().unwrap(), 1);
+        assert_eq!(mv.capacity().unwrap(), 2);
+        assert_eq!(mv.next_index().unwrap(), 1);
+        assert_eq!(mv.remaining_signatures().unwrap(), 1);
+    }
+
+    #[test]
+    fn test_merkle_vlad_exhausts_after_two_signs() {
+        let mut rng = rand::rng();
+        let mk = multi_key::Builder::new_from_random_bytes_with_depth(
+            Codec::LamportMerkleBlake3256Priv,
+            1,
+            &mut rng,
+        )
+        .unwrap()
+        .try_build()
+        .unwrap();
+        let msg = test_wasm_message();
+
+        // leaf 0 signs the vlad
+        let (_vlad, advanced) = Builder::default()
+            .with_signing_key(&mk)
+            .with_message(&msg)
+            .try_build_advance()
+            .unwrap();
+
+        // leaf 1 signs a second message via sign_advance on the advanced key
+        let sv = advanced.sign_view().unwrap();
+        let (_ms2, exhausted) = sv.sign_advance(b"second message", false, None).unwrap();
+
+        // the tree is empty; a third signature fails
+        let sv3 = exhausted.sign_view().unwrap();
+        assert!(sv3.sign_advance(b"third message", false, None).is_err());
+
+        // the stateless sign path never worked for merkle keys
+        assert!(Builder::default()
+            .with_signing_key(&mk)
+            .with_message(&msg)
+            .try_build()
+            .is_err());
+    }
+
+    #[test]
+    fn test_merkle_vlad_rejects_wrong_depth_attr() {
+        let mut rng = rand::rng();
+        let mut mk = multi_key::Builder::new_from_random_bytes_with_depth(
+            Codec::LamportMerkleBlake3256Priv,
+            1,
+            &mut rng,
+        )
+        .unwrap()
+        .try_build()
+        .unwrap();
+
+        // tamper the depth attribute: wire says 1, attr now says 2
+        mk.attributes
+            .insert(multi_key::AttrId::Depth, zeroize::Zeroizing::new(vec![2]));
+
+        assert!(Builder::default()
+            .with_signing_key(&mk)
+            .with_message(&test_wasm_message())
+            .try_build_advance()
+            .is_err());
     }
 }

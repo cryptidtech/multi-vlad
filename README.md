@@ -92,7 +92,12 @@ assert_eq!(vlad, decoded);
   cargo run --example ed25519
   ```
 
-- `examples/xmss.rs` — Build and verify a Vlad with an XMSS-SHA2_10_256 post-quantum ephemeral key pair. XMSS is a stateful hash-based scheme: a single key can sign a bounded number of messages (2^h for height h), which is necessary for a Vlad because the same ephemeral key must sign both the Vlad and the first provenance-log entry. Runnable:
+- `examples/lamport_merkle.rs` — Build and verify a Vlad with a merkle-tree Lamport (`lamport-merkle-blake3-256`) post-quantum ephemeral key pair. This is the recommended ephemeral key type. The tree depth is 1, so the key holds exactly two one-time signatures: one for the Vlad and one for the first provenance-log entry. Merkle keys are stateful, so the example uses `Builder::try_build_advance` and shows the advanced key that the caller must persist. Runnable:
+  ```bash
+  cargo run --example lamport_merkle
+  ```
+
+- `examples/xmss.rs` — Build and verify a Vlad with an XMSS-SHA2_10_256 post-quantum ephemeral key pair. XMSS is a stateful hash-based scheme: a single key can sign a bounded number of messages (2^h for height h), which is necessary for a Vlad because the same ephemeral key must sign both the Vlad and the first provenance-log entry. Use this scheme when the same ephemeral key must sign more than two messages. Runnable:
   ```bash
   cargo run --example xmss
   ```
