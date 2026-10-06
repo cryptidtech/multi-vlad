@@ -5,6 +5,12 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.2] - 2026-10-06
+
+### Changed
+
+- Updated dependencies: `multi-codec` 1.3 → 1.5, `multi-key` 1.2 → 2.0, `multi-sig` 1.3 → 1.4. No public API changes.
+
 ## [0.2.0] - 2026-09-01
 
 ### Added
@@ -84,6 +90,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 - The `multi-base`, `multi-codec`, `multi-key`, `multi-sig`, `multi-trait`, and `multi-util` dependencies use the published crates.io versions. `multi-vlad` does not declare `multi-hash` as a dependency; it appears transitively via `multi-key`.
 
+[0.2.2]: https://github.com/cryptidtech/multi-vlad/compare/v0.2.0...v0.2.2
 [0.2.0]: https://github.com/cryptidtech/multi-vlad/compare/v0.1.2...v0.2.0
 [0.1.2]: https://github.com/cryptidtech/multi-vlad/releases/tag/v0.1.2
 [0.1.1]: https://github.com/cryptidtech/multi-vlad/releases/tag/v0.1.1
