@@ -463,7 +463,7 @@ mod tests {
             .unwrap();
 
         // inner multisig should be combined (non-empty message)
-        assert!(!vlad.multisig().message.is_empty());
+        assert_ne!(vlad.multisig().message, Vec::<u8>::new());
     }
 
     #[test]
