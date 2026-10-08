@@ -3,7 +3,7 @@ use crate::{error::VladError, Error};
 use core::fmt;
 use multi_base::Base;
 use multi_codec::Codec;
-use multi_key::{Multikey, Views};
+use multi_key::{Multikey, ViewBuilder};
 use multi_sig::Multisig;
 use multi_trait::{EncodeInto, EncodeIntoBuffer, Null, TryDecodeFrom};
 use multi_util::{BaseEncoded, CodecInfo, DetectedEncoder, EncodingInfo};
@@ -89,7 +89,7 @@ impl Vlad {
     /// Returns an error if the key does not match the signature, or if the
     /// underlying `multi-key`/`multi-sig` verification fails.
     pub fn verify(&self, mk: &Multikey) -> Result<(), Error> {
-        let vv = mk.verify_view()?;
+        let vv = ViewBuilder::new(mk).verify().build()?;
         vv.verify(&self.0, Some(&self.0.message))?;
         Ok(())
     }
@@ -266,7 +266,7 @@ impl Builder {
         if msg.len() < 4 || msg[..4] != WASM_MAGIC {
             return Err(VladError::InvalidWasm.into());
         }
-        let sv = mk.sign_view()?;
+        let sv = ViewBuilder::new(mk).sign().build()?;
         // combined=true: message is stored inside the Multisig
         let ms = sv.sign(msg, true, None)?;
         Ok(Vlad(ms))
@@ -289,7 +289,7 @@ impl Builder {
         if msg.len() < 4 || msg[..4] != WASM_MAGIC {
             return Err(VladError::InvalidWasm.into());
         }
-        let sv = mk.sign_view()?;
+        let sv = ViewBuilder::new(mk).sign().build()?;
         // combined=true: message is stored inside the Multisig
         let (ms, advanced) = sv.sign_advance(msg, true, None)?;
         Ok((Vlad(ms), advanced))
@@ -536,7 +536,7 @@ mod tests {
     fn test_decode_rejects_detached_multisig() {
         let mk = test_signing_key();
         let msg = test_wasm_message();
-        let sv = mk.sign_view().unwrap();
+        let sv = ViewBuilder::new(&mk).sign().build().unwrap();
         // sign with combined=false to create a detached signature
         let ms = sv.sign(&msg, false, None).unwrap();
         // manually construct a Vlad with a detached Multisig and try to serialize/decode
@@ -553,7 +553,7 @@ mod tests {
     fn test_decode_rejects_non_wasm_message() {
         let mk = test_signing_key();
         let bad_msg = b"not a wasm module at all!";
-        let sv = mk.sign_view().unwrap();
+        let sv = ViewBuilder::new(&mk).sign().build().unwrap();
         // sign with combined=true but non-WASM message
         let ms = sv.sign(bad_msg.as_slice(), true, None).unwrap();
         let mut v = Vec::default();
@@ -643,7 +643,7 @@ mod tests {
         decoded.verify(&advanced).unwrap();
 
         // the advanced key consumed leaf 0 of the 2-leaf tree
-        let mv = advanced.merkle_state_view().unwrap();
+        let mv = ViewBuilder::new(&advanced).merkle_state().build().unwrap();
         assert_eq!(mv.depth().unwrap(), 1);
         assert_eq!(mv.capacity().unwrap(), 2);
         assert_eq!(mv.next_index().unwrap(), 1);
@@ -671,11 +671,11 @@ mod tests {
             .unwrap();
 
         // leaf 1 signs a second message via sign_advance on the advanced key
-        let sv = advanced.sign_view().unwrap();
+        let sv = ViewBuilder::new(&advanced).sign().build().unwrap();
         let (_ms2, exhausted) = sv.sign_advance(b"second message", false, None).unwrap();
 
         // the tree is empty; a third signature fails
-        let sv3 = exhausted.sign_view().unwrap();
+        let sv3 = ViewBuilder::new(&exhausted).sign().build().unwrap();
         assert!(sv3.sign_advance(b"third message", false, None).is_err());
 
         // the stateless sign path never worked for merkle keys

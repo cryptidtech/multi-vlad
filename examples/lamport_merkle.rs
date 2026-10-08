@@ -17,7 +17,7 @@
 //! `ed25519` example for an equivalent with Ed25519.
 
 use multi_codec::Codec;
-use multi_key::{Builder as MkBuilder, Multikey, Views as _};
+use multi_key::{Builder as MkBuilder, Multikey};
 use multi_util::CodecInfo as _;
 use multi_vlad::{Builder, Vlad};
 
@@ -63,7 +63,10 @@ fn main() {
 
     // 8. In a real deployment the `advanced` key MUST be persisted now: leaf 0
     //    is consumed and the next signature (the first plog entry) uses leaf 1.
-    let mv = advanced.merkle_state_view().unwrap();
+    let mv = multi_key::ViewBuilder::new(&advanced)
+        .merkle_state()
+        .build()
+        .unwrap();
     assert_eq!(mv.next_index().unwrap(), 1);
     assert_eq!(mv.remaining_signatures().unwrap(), 1);
 
