@@ -2,7 +2,7 @@
 name = "multi-vlad"
 version = "0.2.3"
 edition = "2021"
-rust-version = "1.96"
+rust-version = "1.99"
 authors = ["Dave Grantham <dwg@linuxprogrammer.org>"]
 description = "Verifiable Long-Lived Address (VLAD) implementation"
 repository = "https://github.com/cryptidtech/multi-vlad.git"
