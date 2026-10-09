@@ -5,6 +5,12 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-10-08
+
+### Changed
+
+- Raised `rust-version` from 1.96 to 1.99 in line with the toolchain floor of the `multi-*` crates. The CI MSRV job installs Rust 1.99.0 and the README MSRV line reads 1.99. This is a minor release under the 0.x rule: a raised MSRV is possibly breaking per the Cargo book rules. No public API changes.
+
 ## [0.2.3] - 2026-10-07
 
 ### Changed
@@ -96,6 +102,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 - The `multi-base`, `multi-codec`, `multi-key`, `multi-sig`, `multi-trait`, and `multi-util` dependencies use the published crates.io versions. `multi-vlad` does not declare `multi-hash` as a dependency; it appears transitively via `multi-key`.
 
+[0.3.0]: https://github.com/cryptidtech/multi-vlad/compare/v0.2.3...v0.3.0
 [0.2.3]: https://github.com/cryptidtech/multi-vlad/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/cryptidtech/multi-vlad/compare/v0.2.0...v0.2.2
 [0.2.0]: https://github.com/cryptidtech/multi-vlad/compare/v0.1.2...v0.2.0
