@@ -62,7 +62,7 @@ jobs:
         # Keep the list in sync with the [features] table. Code Lint above
         # keeps --all-features, so the gated code stays lint-checked.
         run: |
-          cargo +${{ matrix.rust }} test --verbose --features deprecated,legacy_chacha20_fallback,wasm --target ${{ matrix.target }}
+          cargo +${{ matrix.rust }} test --verbose --all-features --target ${{ matrix.target }}
 
   build_macos:
     needs: msrv
@@ -106,7 +106,7 @@ jobs:
         # Keep the list in sync with the [features] table. Code Lint above
         # keeps --all-features, so the gated code stays lint-checked.
         run: |
-          cargo +${{ matrix.rust }} test --verbose --features deprecated,legacy_chacha20_fallback,wasm --target ${{ matrix.target }}
+          cargo +${{ matrix.rust }} test --verbose --all-features --target ${{ matrix.target }}
 
   audit:
     needs: [build_linux, build_macos]
