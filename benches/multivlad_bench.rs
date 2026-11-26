@@ -14,7 +14,7 @@ fn bench_vlad_encoding(c: &mut Criterion) {
     .to_inner();
     let vlad = Builder::default()
         .with_signing_key(&signing_key)
-        .with_message(&[0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00])
+        .with_message(&[0x00, 0x61, 0x73, 0x6d, 0x0d, 0x00, 0x01, 0x00])
         .try_build()
         .unwrap();
 

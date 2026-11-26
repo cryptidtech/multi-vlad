@@ -33,7 +33,7 @@ This crate contains only the `Vlad` half of the former `bs-multicid` workspace c
 
 - `Vlad` newtype over a combined `Multisig`.
 - Builder pattern for `Vlad` from a signing key and a WASM message.
-- WASM validation: rejects messages that do not begin with the `\0asm` magic bytes.
+- WASM validation: rejects messages that miss the `\0asm` magic bytes or that do not carry the component-form version byte.
 - Combined-signature validation: rejects detached signatures (empty message).
 - `verify()` against the signing key via `multi-key` and `multi-sig`.
 - Multibase encoding via `multi-base` and `multi-util`. `EncodedVlad` detects the encoding on decode and always encodes to `Base32Lower`.
@@ -60,7 +60,7 @@ use multi_key::EncodedMultikey;
 let mk = EncodedMultikey::try_from(
     "fba2480260874657374206b657901012064e58adf88f85cbec6a0448a0803f9d28cf9231a7141be413f83cf6aa883cd04"
 ).unwrap().to_inner();
-let msg = vec![0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00]; // WASM magic + version
+let msg = vec![0x00, 0x61, 0x73, 0x6d, 0x0d, 0x00, 0x01, 0x00]; // WASM magic + component version
 
 let vlad = Builder::default()
     .with_signing_key(&mk)
@@ -111,7 +111,7 @@ The former `bs-multicid` workspace crate contained two types: `Cid` and `Vlad`. 
 
 Splitting the crate lets a downstream crate depend on only the type it needs. For example, `wacc` needs `Cid` but not `Vlad`, so `wacc` does not pull in `multi-key` or `multi-sig`.
 
-The `multi-vlad` crate is the `Vlad` half. The `multi-cid` crate is the `Cid` half. `Vlad` does not depend on `wacc` or `multi-hash`. The WASM is opaque bytes; the code validates it only by the `\0asm` magic header. The `Script` type lives in `provenance-log`, not `wacc`.
+The `multi-vlad` crate is the `Vlad` half. The `multi-cid` crate is the `Cid` half. `Vlad` does not depend on `wacc` or `multi-hash`. The WASM is opaque bytes; the code validates the `\0asm` magic header and the component-form version byte. The `Script` type lives in `provenance-log`, not `wacc`.
 
 ## Testing
 

@@ -1,6 +1,6 @@
 [package]
 name = "multi-vlad"
-version = "0.3.0"
+version = "0.4.0"
 edition = "2021"
 rust-version = "1.99"
 authors = ["Dave Grantham <dwg@linuxprogrammer.org>"]
@@ -12,18 +12,16 @@ keywords = ["vlad", "multisig", "provenance", "wasm", "multiformats"]
 categories = ["cryptography", "encoding"]
 
 [features]
-default = ["serde", "dag_cbor", "xmss"]
-dag_cbor = ["dep:multi-cbor", "multi-cbor/tags"]
+default = ["serde", "xmss"]
 xmss = ["multi-key/xmss"]
 
 [dependencies]
 multi-base = { version = "1.1", default-features = false }
-multi-cbor = { version = "0.2", optional = true }
-multi-codec = "1.6"
-multi-key = "2.2"
-multi-sig = "1.6"
+multi-codec = "2.0"
+multi-key = "3.1"
+multi-sig = "3.0"
 multi-trait = { version = "1.1", default-features = false }
-multi-util = "1.2"
+multi-util = "2.0"
 thiserror = "2.0"
 serde = { version = "1.0", default-features = false, features = [
   "alloc",
@@ -33,10 +31,10 @@ serde = { version = "1.0", default-features = false, features = [
 [dev-dependencies]
 criterion = "0.8"
 multi-cbor = "0.2"
-proptest = "1.11"
+proptest = "1.12"
 rand = "0.10"
 serde_json = "1.0"
-zeroize = "1"
+zeroize = "1.9"
 
 [[bench]]
 name = "multivlad_bench"

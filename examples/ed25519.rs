@@ -17,9 +17,9 @@ fn main() {
         .try_build()
         .unwrap();
 
-    // 2. Create a minimal WASM first-lock script (magic + version 1).
+    // 2. Create a minimal WASM first-lock script (magic + component version).
     //    A real script would embed public keys and validation logic.
-    let wasm = vec![0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00];
+    let wasm = vec![0x00, 0x61, 0x73, 0x6d, 0x0d, 0x00, 0x01, 0x00];
 
     // 3. Build the Vlad: sign the WASM with the ephemeral key (combined=true).
     let vlad: Vlad = Builder::default()
