@@ -22,6 +22,10 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 - The `dag_cbor` cargo feature and the optional `multi-cbor` dependency. `default` is now `["serde", "xmss"]`, and `multi-cbor` remains only as a dev-dependency. Callers that enabled `dag_cbor` to round-trip a Vlad through CBOR lose that path in this release.
 
+### Security
+
+- Removed `sad-rsa` from the dependency graph (RUSTSEC-2026-0583, CVSS 5.3 medium, denial of service): RSA private-key construction, validation, and re-encoding panic on malformed primes, factors, and exponents, and on re-encoding of certain valid keys. The patch releases live in `sad-rsa` 0.10.4+, which is unreachable through a version bump: `multi-key` 3.1.0, the newest release when the advisory published, still requires `sad-rsa ^0.2.3`. The `multi-key` dependency now lists the multi-key 3.1.0 default feature set minus `rsa`, so the crate keeps the same feature surface except RSA, and no code in the crate touches RSA keys. `sad-rsa` and the `pkcs1` 0.8.0-rc.4 pin leave the lockfile with it. A downstream that needs RSA keys enables `multi-key/rsa` explicitly and waits for a multi-key release that depends on the fixed sad-rsa. `cargo audit` reports no findings against this lockfile.
+
 ### CI
 
 - Rebuilt the workflow for the self-hosted multi-arch pool. An `msrv` job pinned to Rust 1.99.1 (`rust-version` itself stays 1.99) gates a Linux build matrix — x86_64-unknown-linux-gnu on stable, aarch64-unknown-linux-gnu and riscv64gc-unknown-linux-gnu on nightly, cross-tested on the x64 host through the image's target std, linkers, and qemu-user runners — and a new macOS build job covering aarch64-apple-darwin and x86_64-apple-darwin on the self-hosted macOS runner pool. Clippy keeps `--all-features` per target so the gated code stays lint-checked; the test jobs run an explicit feature list instead of `--all-features` to keep the cross-arch runs inside their budgets; rustfmt runs on the host stable toolchain.

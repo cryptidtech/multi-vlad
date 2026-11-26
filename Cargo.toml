@@ -18,7 +18,27 @@ xmss = ["multi-key/xmss"]
 [dependencies]
 multi-base = { version = "1.1", default-features = false }
 multi-codec = "2.0"
-multi-key = "3.1"
+multi-key = { version = "3.2", default-features = false, features = [
+  "bcrypt",
+  "bls12-381",
+  "chacha20",
+  "curve25519",
+  "fn-dsa",
+  "frodokem",
+  "lamport",
+  "mayo",
+  "ml-dsa",
+  "ml-kem",
+  "p256",
+  "p384",
+  "p521",
+  "secp256k1",
+  "serde",
+  "slh-dsa",
+  "sntrup",
+  "threshold",
+  "xmss",
+] }
 multi-sig = "3.0"
 multi-trait = { version = "1.1", default-features = false }
 multi-util = "2.0"
