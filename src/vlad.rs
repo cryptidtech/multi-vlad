@@ -14,6 +14,11 @@ pub const SIGIL: Codec = Codec::Vlad;
 /// WASM binary magic bytes: \0asm
 const WASM_MAGIC: [u8; 4] = [0x00, 0x61, 0x73, 0x6d];
 
+/// WASM version byte of a binary WASM component, following the \0asm magic.
+/// The version byte identifies the component script form, the only script
+/// form of a first-lock message.
+const COMPONENT_VERSION_BYTE: u8 = 0x0d;
+
 /// a multibase encoded Vlad that can decode from any number of encoding but always encodes to
 /// Vlad's preferred `Base32Lower` multibase encoding (i.e. liberal in what we except, strict in what
 /// we generate)
@@ -42,7 +47,8 @@ impl Vlad {
     ///
     /// The `Multisig` message must hold the WASM first-lock script bytecode and
     /// the signature must be over that bytecode. Call [`Vlad::validate`] after
-    /// construction to enforce the combined-signature and WASM-magic invariants.
+    /// construction to enforce the combined-signature and WASM
+    /// component-form invariants.
     ///
     /// This constructor is intended for callers that build a `Multisig`
     /// directly (e.g. via a signing view) rather than through the
@@ -53,7 +59,7 @@ impl Vlad {
     }
 
     /// Validate that the inner Multisig is a combined signature with a valid
-    /// WASM binary message.
+    /// WASM component-form message.
     ///
     /// Null Vlads are exempt from validation (sentinel value).
     ///
@@ -61,7 +67,9 @@ impl Vlad {
     ///
     /// Returns [`VladError::NotCombined`] if the inner Multisig has an empty
     /// message (detached signature). Returns [`VladError::InvalidWasm`] if the
-    /// message does not begin with the `\0asm` WASM magic bytes.
+    /// message does not begin with the `\0asm` WASM magic bytes. Returns
+    /// [`VladError::ScriptForm`] if the message is not the component form:
+    /// the version byte that follows the magic is not `0x0d`.
     pub fn validate(&self) -> Result<(), Error> {
         // null Multisig is a valid sentinel value
         if self.0.is_null() {
@@ -70,9 +78,8 @@ impl Vlad {
         if self.0.message.is_empty() {
             return Err(VladError::NotCombined.into());
         }
-        if self.0.message.len() < 4 || self.0.message[..4] != WASM_MAGIC {
-            return Err(VladError::InvalidWasm.into());
-        }
+        // validate the message is the WASM component form
+        check_component_form(&self.0.message)?;
         Ok(())
     }
 
@@ -111,8 +118,8 @@ impl Vlad {
     /// `first_lock = Script::Bin(root_key, vlad.message())`.
     ///
     /// The returned slice is the `message` field of the inner combined
-    /// Multisig. It always begins with the `\0asm` WASM magic bytes for a
-    /// non-null Vlad.
+    /// Multisig. It is the `\0asm` magic followed by the `0x0d` component
+    /// version byte for a non-null Vlad.
     #[must_use]
     pub fn message(&self) -> &[u8] {
         &self.0.message
@@ -259,13 +266,15 @@ impl Builder {
     }
 
     /// build the vlad
+    ///
+    /// The message must carry the WASM component form: the `\0asm` magic
+    /// followed by the `0x0d` component version byte. Any other WASM form
+    /// rejects with [`VladError::ScriptForm`] before the message is signed.
     pub fn try_build(&self) -> Result<Vlad, Error> {
         let mk = self.mk.as_ref().ok_or(VladError::MissingSigningKey)?;
         let msg = self.message.as_ref().ok_or(VladError::MissingMessage)?;
-        // validate message is WASM binary before signing
-        if msg.len() < 4 || msg[..4] != WASM_MAGIC {
-            return Err(VladError::InvalidWasm.into());
-        }
+        // validate the message is the WASM component form before signing
+        check_component_form(msg)?;
         let sv = ViewBuilder::new(mk).sign().build()?;
         // combined=true: message is stored inside the Multisig
         let ms = sv.sign(msg, true, None)?;
@@ -285,10 +294,8 @@ impl Builder {
     pub fn try_build_advance(&self) -> Result<(Vlad, Multikey), Error> {
         let mk = self.mk.as_ref().ok_or(VladError::MissingSigningKey)?;
         let msg = self.message.as_ref().ok_or(VladError::MissingMessage)?;
-        // validate message is WASM binary before signing
-        if msg.len() < 4 || msg[..4] != WASM_MAGIC {
-            return Err(VladError::InvalidWasm.into());
-        }
+        // validate the message is the WASM component form before signing
+        check_component_form(msg)?;
         let sv = ViewBuilder::new(mk).sign().build()?;
         // combined=true: message is stored inside the Multisig
         let (ms, advanced) = sv.sign_advance(msg, true, None)?;
@@ -309,6 +316,110 @@ impl Builder {
             advanced,
         ))
     }
+
+    /// build the genesis Vlad of the log-foot genesis
+    ///
+    /// A log-foot genesis authorizes the log's first entry under the VLAD
+    /// first lock, and that first lock is the root key path's lock script of
+    /// the genesis install. The root lock script mandate requires the root
+    /// key path to carry exactly one multiproof verifier script, which is a
+    /// WASM component, so the genesis Vlad's message carries the component
+    /// form. The component-form rule of [`try_build`](Self::try_build)
+    /// rejects any other WASM form with [`VladError::ScriptForm`], and the
+    /// genesis duty checks the message before the signing state.
+    ///
+    /// The other genesis class is the fork-child genesis: the child log
+    /// forks under a new Vlad, and the parent governing script at the fork
+    /// point stays the child genesis's first lock, so the fork-child Vlad's
+    /// own message carries no root-pattern duty. The genesis classes keep
+    /// the key-publication evidence duty and install the multiproof-era
+    /// locks, including the root pattern, in their genesis entries' lock
+    /// lists.
+    ///
+    /// # Errors
+    ///
+    /// Reports [`VladError::ScriptForm`] for a message that is not the WASM
+    /// component form, and the errors of [`try_build`](Self::try_build).
+    pub fn try_build_genesis(&self) -> Result<Vlad, Error> {
+        self.try_build_genesis_inner(Self::try_build)
+    }
+
+    /// build the genesis Vlad of the log-foot genesis with a stateful
+    /// signing key, returning the genesis Vlad AND the advanced key state
+    ///
+    /// The genesis rule of [`try_build_genesis`](Self::try_build_genesis)
+    /// applies, and the caller must persist the returned advanced key so the
+    /// consumed one-time slot is never reused.
+    ///
+    /// # Errors
+    ///
+    /// Reports [`VladError::ScriptForm`] for a message that is not the WASM
+    /// component form, and the errors of
+    /// [`try_build_advance`](Self::try_build_advance).
+    pub fn try_build_genesis_advance(&self) -> Result<(Vlad, Multikey), Error> {
+        self.try_build_genesis_inner(Self::try_build_advance)
+    }
+
+    /// build a base encoded genesis Vlad, with the stateless signing path
+    ///
+    /// The genesis rule of [`try_build_genesis`](Self::try_build_genesis)
+    /// applies.
+    ///
+    /// # Errors
+    ///
+    /// Reports [`VladError::ScriptForm`] for a message that is not the WASM
+    /// component form, and the errors of
+    /// [`try_build_encoded`](Self::try_build_encoded).
+    pub fn try_build_genesis_encoded(&self) -> Result<EncodedVlad, Error> {
+        self.try_build_genesis_inner(Self::try_build_encoded)
+    }
+
+    /// build a base encoded genesis Vlad with a stateful signing key,
+    /// returning the encoded genesis Vlad AND the advanced key state
+    ///
+    /// See [`try_build_genesis_advance`](Self::try_build_genesis_advance).
+    ///
+    /// # Errors
+    ///
+    /// Reports [`VladError::ScriptForm`] for a message that is not the WASM
+    /// component form, and the errors of
+    /// [`try_build_advance_encoded`](Self::try_build_advance_encoded).
+    pub fn try_build_genesis_advance_encoded(&self) -> Result<(EncodedVlad, Multikey), Error> {
+        self.try_build_genesis_inner(Self::try_build_advance_encoded)
+    }
+
+    /// builds through `path` after the genesis first-lock duty passes
+    ///
+    /// The genesis duty is the root-pattern rule of the log-foot genesis:
+    /// the first lock is the root key path's lock script, so `self.message`
+    /// must carry the multiproof verifier component form. The duty checks
+    /// the message before it signs, and a missing message reports the same
+    /// [`VladError::MissingMessage`] the build path reports.
+    fn try_build_genesis_inner<T>(
+        &self,
+        path: impl FnOnce(&Self) -> Result<T, Error>,
+    ) -> Result<T, Error> {
+        let msg = self.message.as_ref().ok_or(VladError::MissingMessage)?;
+        check_component_form(msg)?;
+        path(self)
+    }
+}
+
+/// the WASM component-form check the builders share: a first-lock message is
+/// the \0asm magic followed by the `0x0d` component version byte
+///
+/// A message that is shorter than the magic, or that misses the magic,
+/// reports [`VladError::InvalidWasm`]. A message that passes the magic check
+/// but stops before the version byte, or that carries any other value there,
+/// rejects as not the component form: [`VladError::ScriptForm`].
+fn check_component_form(msg: &[u8]) -> Result<(), VladError> {
+    if msg.len() < 4 || msg[..4] != WASM_MAGIC {
+        return Err(VladError::InvalidWasm);
+    }
+    if msg.len() < 5 || msg[4] != COMPONENT_VERSION_BYTE {
+        return Err(VladError::ScriptForm);
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -323,15 +434,32 @@ mod tests {
         EncodedMultikey::try_from(s).unwrap().to_inner()
     }
 
-    /// Helper: returns a minimal valid WASM module (magic + version 1)
-    fn test_wasm_message() -> Vec<u8> {
+    /// Helper: a minimal WASM component artifact (magic + component version)
+    fn test_component_message() -> Vec<u8> {
+        vec![0x00, 0x61, 0x73, 0x6d, 0x0d, 0x00, 0x01, 0x00]
+    }
+
+    /// Helper: a WASM core module (magic + version 1), the rejected script
+    /// form
+    fn test_module_form_message() -> Vec<u8> {
         vec![0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00]
+    }
+
+    /// Helper: a WASM binary whose version byte is not the component version
+    fn test_unknown_form_message() -> Vec<u8> {
+        vec![0x00, 0x61, 0x73, 0x6d, 0x02, 0x00, 0x00, 0x00]
+    }
+
+    /// Helper: a WASM binary that stops after the \0asm magic, with no
+    /// version byte
+    fn test_magic_only_message() -> Vec<u8> {
+        WASM_MAGIC.to_vec()
     }
 
     #[test]
     fn test_default() {
         let mk = test_signing_key();
-        let msg = test_wasm_message();
+        let msg = test_component_message();
 
         let vlad = Builder::default()
             .with_signing_key(&mk)
@@ -345,7 +473,7 @@ mod tests {
     #[test]
     fn test_binary_roundtrip() {
         let mk = test_signing_key();
-        let msg = test_wasm_message();
+        let msg = test_component_message();
 
         let vlad = Builder::default()
             .with_signing_key(&mk)
@@ -360,7 +488,7 @@ mod tests {
     #[test]
     fn test_encoded_roundtrip() {
         let mk = test_signing_key();
-        let msg = test_wasm_message();
+        let msg = test_component_message();
 
         let vlad = Builder::default()
             .with_signing_key(&mk)
@@ -375,7 +503,7 @@ mod tests {
     #[test]
     fn test_encodings_roundtrip() {
         let mk = test_signing_key();
-        let msg = test_wasm_message();
+        let msg = test_component_message();
 
         // start at Identity so we skip it
         let itr: BaseIter = Base::Identity.into();
@@ -397,7 +525,7 @@ mod tests {
     #[test]
     fn test_signed_vlad() {
         let mk = test_signing_key();
-        let msg = test_wasm_message();
+        let msg = test_component_message();
 
         let vlad = Builder::default()
             .with_signing_key(&mk)
@@ -420,7 +548,7 @@ mod tests {
     #[test]
     fn test_verify_wrong_key() {
         let mk = test_signing_key();
-        let msg = test_wasm_message();
+        let msg = test_component_message();
 
         let vlad = Builder::default()
             .with_signing_key(&mk)
@@ -440,7 +568,7 @@ mod tests {
     #[test]
     fn test_message_accessor() {
         let mk = test_signing_key();
-        let msg = test_wasm_message();
+        let msg = test_component_message();
 
         let vlad = Builder::default()
             .with_signing_key(&mk)
@@ -454,7 +582,7 @@ mod tests {
     #[test]
     fn test_multisig_accessor() {
         let mk = test_signing_key();
-        let msg = test_wasm_message();
+        let msg = test_component_message();
 
         let vlad = Builder::default()
             .with_signing_key(&mk)
@@ -479,7 +607,7 @@ mod tests {
     #[test]
     fn test_equality() {
         let mk = test_signing_key();
-        let msg = test_wasm_message();
+        let msg = test_component_message();
 
         let vlad1 = Builder::default()
             .with_signing_key(&mk)
@@ -496,7 +624,7 @@ mod tests {
 
     #[test]
     fn test_missing_signing_key() {
-        let msg = test_wasm_message();
+        let msg = test_component_message();
         let result = Builder::default().with_message(&msg).try_build();
         assert!(result.is_err());
     }
@@ -533,9 +661,53 @@ mod tests {
     }
 
     #[test]
+    fn test_builder_rejects_the_module_form() {
+        let mk = test_signing_key();
+
+        // the stateless build path rejects the module form: the message is
+        // not the component form
+        let result = Builder::default()
+            .with_signing_key(&mk)
+            .with_message(&test_module_form_message())
+            .try_build();
+        assert!(matches!(result, Err(Error::Vlad(VladError::ScriptForm))));
+
+        // the stateful build path rejects the module form too
+        let result = Builder::default()
+            .with_signing_key(&mk)
+            .with_message(&test_module_form_message())
+            .try_build_advance();
+        assert!(matches!(result, Err(Error::Vlad(VladError::ScriptForm))));
+    }
+
+    #[test]
+    fn test_builder_rejects_a_magic_only_message() {
+        let mk = test_signing_key();
+
+        // the magic check passes but no version byte follows it
+        let result = Builder::default()
+            .with_signing_key(&mk)
+            .with_message(&test_magic_only_message())
+            .try_build();
+        assert!(matches!(result, Err(Error::Vlad(VladError::ScriptForm))));
+    }
+
+    #[test]
+    fn test_builder_rejects_an_unknown_form() {
+        let mk = test_signing_key();
+
+        // an unknown version byte rejects as not the component form
+        let result = Builder::default()
+            .with_signing_key(&mk)
+            .with_message(&test_unknown_form_message())
+            .try_build();
+        assert!(matches!(result, Err(Error::Vlad(VladError::ScriptForm))));
+    }
+
+    #[test]
     fn test_decode_rejects_detached_multisig() {
         let mk = test_signing_key();
-        let msg = test_wasm_message();
+        let msg = test_component_message();
         let sv = ViewBuilder::new(&mk).sign().build().unwrap();
         // sign with combined=false to create a detached signature
         let ms = sv.sign(&msg, false, None).unwrap();
@@ -565,13 +737,28 @@ mod tests {
         assert!(result.is_err());
     }
 
+    #[test]
+    fn test_decode_rejects_the_module_form() {
+        let mk = test_signing_key();
+        let sv = ViewBuilder::new(&mk).sign().build().unwrap();
+        // sign with combined=true but a module-form message
+        let ms = sv.sign(&test_module_form_message(), true, None).unwrap();
+        let mut v = Vec::default();
+        let sigil_bytes: Vec<u8> = SIGIL.into();
+        v.extend_from_slice(&sigil_bytes);
+        let ms_bytes: Vec<u8> = ms.into();
+        v.extend_from_slice(&ms_bytes);
+        let result = Vlad::try_from(v.as_slice());
+        assert!(matches!(result, Err(Error::Vlad(VladError::ScriptForm))));
+    }
+
     /// Demonstrate the plog verification flow usage pattern:
     /// extract the WASM first-lock script from the Vlad, verify it is valid
     /// WASM, and verify the Vlad signature against the signing key.
     #[test]
     fn test_plog_verification_flow() {
         let mk = test_signing_key();
-        let msg = test_wasm_message();
+        let msg = test_component_message();
 
         let vlad = Builder::default()
             .with_signing_key(&mk)
@@ -615,7 +802,7 @@ mod tests {
         .unwrap()
         .try_build()
         .unwrap();
-        let msg = test_wasm_message();
+        let msg = test_component_message();
 
         let (vlad, advanced) = Builder::default()
             .with_signing_key(&mk)
@@ -661,7 +848,7 @@ mod tests {
         .unwrap()
         .try_build()
         .unwrap();
-        let msg = test_wasm_message();
+        let msg = test_component_message();
 
         // leaf 0 signs the vlad
         let (_vlad, advanced) = Builder::default()
@@ -704,8 +891,151 @@ mod tests {
 
         assert!(Builder::default()
             .with_signing_key(&mk)
-            .with_message(&test_wasm_message())
+            .with_message(&test_component_message())
             .try_build_advance()
             .is_err());
+    }
+
+    #[test]
+    fn test_try_build_genesis_accepts_the_verifier_component_form() {
+        let mk = test_signing_key();
+
+        let vlad = Builder::default()
+            .with_signing_key(&mk)
+            .with_message(&test_component_message())
+            .try_build_genesis()
+            .unwrap();
+
+        // the genesis install carries the multiproof verifier form, and the
+        // genesis signature verifies the first lock against the key
+        assert_eq!(vlad.message()[4], COMPONENT_VERSION_BYTE);
+        vlad.validate().unwrap();
+        vlad.verify(&mk).unwrap();
+    }
+
+    #[test]
+    fn test_try_build_genesis_rejects_the_module_form() {
+        let mk = test_signing_key();
+
+        let result = Builder::default()
+            .with_signing_key(&mk)
+            .with_message(&test_module_form_message())
+            .try_build_genesis();
+
+        assert!(matches!(result, Err(Error::Vlad(VladError::ScriptForm))));
+    }
+
+    #[test]
+    fn test_try_build_genesis_rejects_an_unknown_form() {
+        let mk = test_signing_key();
+
+        let result = Builder::default()
+            .with_signing_key(&mk)
+            .with_message(&test_unknown_form_message())
+            .try_build_genesis();
+
+        assert!(matches!(result, Err(Error::Vlad(VladError::ScriptForm))));
+    }
+
+    #[test]
+    fn test_try_build_genesis_rejects_a_non_wasm_message() {
+        let mk = test_signing_key();
+
+        let result = Builder::default()
+            .with_signing_key(&mk)
+            .with_message(b"not a wasm module")
+            .try_build_genesis();
+
+        assert!(matches!(result, Err(Error::Vlad(VladError::InvalidWasm))));
+    }
+
+    #[test]
+    fn test_try_build_genesis_reports_missing_inputs() {
+        let mk = test_signing_key();
+
+        // a missing message: the genesis duty reports the same missing
+        // message error the build path reports
+        let result = Builder::default().with_signing_key(&mk).try_build_genesis();
+        assert!(matches!(
+            result,
+            Err(Error::Vlad(VladError::MissingMessage))
+        ));
+
+        // a missing signing key: the build path reports it
+        let result = Builder::default()
+            .with_message(&test_component_message())
+            .try_build_genesis();
+        assert!(matches!(
+            result,
+            Err(Error::Vlad(VladError::MissingSigningKey))
+        ));
+    }
+
+    #[test]
+    fn test_try_build_genesis_encoded_roundtrip() {
+        let mk = test_signing_key();
+
+        let vlad = Builder::default()
+            .with_signing_key(&mk)
+            .with_message(&test_component_message())
+            .with_base_encoding(Base::Base32Lower)
+            .try_build_genesis_encoded()
+            .unwrap();
+
+        let s = vlad.to_string();
+        let de = EncodedVlad::try_from(s.as_str()).unwrap();
+        assert_eq!(de.to_inner().message()[4], COMPONENT_VERSION_BYTE);
+    }
+
+    #[test]
+    fn test_genesis_advance_for_a_one_time_key() {
+        let mut rng = rand::rng();
+        let mk = multi_key::Builder::new_from_random_bytes_with_depth(
+            Codec::LamportMerkleBlake3256Priv,
+            1,
+            &mut rng,
+        )
+        .unwrap()
+        .try_build()
+        .unwrap();
+
+        let (vlad, advanced) = Builder::default()
+            .with_signing_key(&mk)
+            .with_message(&test_component_message())
+            .try_build_genesis_advance()
+            .unwrap();
+
+        // the genesis install carries the multiproof verifier form
+        assert_eq!(vlad.message()[4], COMPONENT_VERSION_BYTE);
+
+        // the advanced key verifies the genesis vlad (same tree root)
+        vlad.verify(&advanced).unwrap();
+
+        // the genesis signature consumed the one-time slot at leaf 0
+        let mv = ViewBuilder::new(&advanced).merkle_state().build().unwrap();
+        assert_eq!(mv.next_index().unwrap(), 1);
+    }
+
+    #[test]
+    fn test_genesis_advance_encoded_roundtrip() {
+        let mut rng = rand::rng();
+        let mk = multi_key::Builder::new_from_random_bytes_with_depth(
+            Codec::LamportMerkleBlake3256Priv,
+            1,
+            &mut rng,
+        )
+        .unwrap()
+        .try_build()
+        .unwrap();
+
+        let (vlad, advanced) = Builder::default()
+            .with_signing_key(&mk)
+            .with_message(&test_component_message())
+            .try_build_genesis_advance_encoded()
+            .unwrap();
+
+        let inner = vlad.to_inner();
+        assert_eq!(inner.message()[4], COMPONENT_VERSION_BYTE);
+        inner.verify(&advanced).unwrap();
     }
 }

@@ -5,6 +5,35 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-11-26
+
+### Added
+
+- Genesis builders for the log-foot genesis: `Builder::try_build_genesis`, `try_build_genesis_advance`, `try_build_genesis_encoded`, and `try_build_genesis_advance_encoded`. A log-foot genesis authorizes the log's first entry under the VLAD first lock, and that first lock is the root key path's lock script of the genesis install, so the genesis Vlad's message must carry the multiproof verifier WASM component form. The shared duty checks the message before the signing state (a missing message reports the same `VladError::MissingMessage` the build path reports) and then builds through the matching plain builder: the advance variants return the advanced key state for persistence, exactly like `try_build_advance`.
+- Two `VladError` variants. `ScriptForm` rejects a message that passes the `\0asm` magic check but is not the component form. `RootPattern` is reserved for the genesis first-lock duty: the genesis Vlad's message must carry the multiproof verifier component form of the root pattern. Both report the `"Vlad"` kind from `Error::kind()`.
+
+### Changed
+
+- Enforced the WASM component form for a Vlad message across `Vlad::validate` and every builder path (`try_build`, `try_build_advance`, and the encoded and genesis variants). A message must now carry the `\0asm` magic followed by the `0x0d` binary-component version byte; the former rule accepted any `\0asm` binary. A message shorter than the magic, or missing the magic, reports `VladError::InvalidWasm` as before. A message that stops after the magic, or that carries any other value in the version byte, reports `VladError::ScriptForm`. This breaks callers that pass a core-module form message (magic + `0x01`): rebuild the message from the component-form first-lock script and build the Vlad again. The decode and deserialize paths reject through the same check via `Vlad::validate`. The doc comments, README, and examples now use the component form.
+- Updated the `multi-*` dependencies to their next-generation crates.io releases: `multi-codec` 1.6 → 2.0, `multi-key` 2.2 → 3.1, `multi-sig` 1.6 → 3.0, `multi-util` 1.2 → 2.0. The `Multikey` returned by the advance builders and consumed by `Vlad::verify` now carries the `multi-key` 3.x type, so downstream callers that name `Multikey` directly follow the major bumps.
+- Dev-dependency bumps: `proptest` 1.11 → 1.12, `zeroize` 1 → 1.9.
+
+### Removed
+
+- The `dag_cbor` cargo feature and the optional `multi-cbor` dependency. `default` is now `["serde", "xmss"]`, and `multi-cbor` remains only as a dev-dependency. Callers that enabled `dag_cbor` to round-trip a Vlad through CBOR lose that path in this release.
+
+### Security
+
+- Removed `sad-rsa` from the dependency graph (RUSTSEC-2026-0583, CVSS 5.3 medium, denial of service): RSA private-key construction, validation, and re-encoding panic on malformed primes, factors, and exponents, and on re-encoding of certain valid keys. The patch releases live in `sad-rsa` 0.10.4+, which is unreachable through a version bump: `multi-key` 3.1.0, the newest release when the advisory published, still requires `sad-rsa ^0.2.3`. The `multi-key` dependency now lists the multi-key 3.1.0 default feature set minus `rsa`, so the crate keeps the same feature surface except RSA, and no code in the crate touches RSA keys. `sad-rsa` and the `pkcs1` 0.8.0-rc.4 pin leave the lockfile with it. A downstream that needs RSA keys enables `multi-key/rsa` explicitly and waits for a multi-key release that depends on the fixed sad-rsa. `cargo audit` reports no findings against this lockfile.
+
+### CI
+
+- Rebuilt the workflow for the self-hosted multi-arch pool. An `msrv` job pinned to Rust 1.99.1 (`rust-version` itself stays 1.99) gates a Linux build matrix — x86_64-unknown-linux-gnu on stable, aarch64-unknown-linux-gnu and riscv64gc-unknown-linux-gnu on nightly, cross-tested on the x64 host through the image's target std, linkers, and qemu-user runners — and a new macOS build job covering aarch64-apple-darwin and x86_64-apple-darwin on the self-hosted macOS runner pool. Clippy keeps `--all-features` per target so the gated code stays lint-checked; the test jobs run an explicit feature list instead of `--all-features` to keep the cross-arch runs inside their budgets; rustfmt runs on the host stable toolchain.
+- Removed the `pkcs1` 0.8.0-rc.4 pin steps from every job.
+- Removed the coverage job and the Codecov upload.
+- The Security Audit job now waits for the build jobs and skips `cargo install cargo-audit` when the binary is already present.
+- Added `.github/dependabot.yml`: weekly cargo updates for direct and indirect dependencies, grouped by patch and minor bump type, labeled and with the `deps` commit prefix.
+
 ## [0.3.0] - 2026-10-08
 
 ### Changed
@@ -102,6 +131,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 - The `multi-base`, `multi-codec`, `multi-key`, `multi-sig`, `multi-trait`, and `multi-util` dependencies use the published crates.io versions. `multi-vlad` does not declare `multi-hash` as a dependency; it appears transitively via `multi-key`.
 
+[0.4.0]: https://github.com/cryptidtech/multi-vlad/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/cryptidtech/multi-vlad/compare/v0.2.3...v0.3.0
 [0.2.3]: https://github.com/cryptidtech/multi-vlad/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/cryptidtech/multi-vlad/compare/v0.2.0...v0.2.2

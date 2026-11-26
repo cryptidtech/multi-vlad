@@ -19,7 +19,8 @@
 //! field holds the binary WASM of a first-lock script. The signature is over
 //! that script, signed by an ephemeral key pair. The `Vlad` validates that the
 //! inner `Multisig` is combined (non-empty message) and that the message
-//! begins with the `\0asm` WASM magic bytes.
+//! carries the WASM component form: the `\0asm` magic followed by the `0x0d`
+//! component version byte, the only script form of a first-lock message.
 //!
 //! The goal is to avoid the anti-pattern of using public keys as identifiers.
 //! Public keys are subject to compromise and rotation, so identifiers derived
@@ -39,7 +40,7 @@
 //!    signing key. This proves the VLAD was created by someone who held the
 //!    ephemeral private key.
 //! 4. Call [`Vlad::validate`] to confirm the inner Multisig is combined and
-//!    the message is valid WASM.
+//!    the message is the WASM component form.
 //! 5. The plog `Log::verify()` iterator runs the WASM first-lock script
 //!    through the wacc VM to authorize the genesis entry.
 //!
@@ -52,7 +53,7 @@
 //! let mk = EncodedMultikey::try_from(
 //!     "fba2480260874657374206b657901012064e58adf88f85cbec6a0448a0803f9d28cf9231a7141be413f83cf6aa883cd04"
 //! ).unwrap().to_inner();
-//! let msg = vec![0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00]; // WASM magic + version
+//! let msg = vec![0x00, 0x61, 0x73, 0x6d, 0x0d, 0x00, 0x01, 0x00]; // WASM magic + component version
 //!
 //! let vlad = Builder::default()
 //!     .with_signing_key(&mk)

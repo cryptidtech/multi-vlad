@@ -15,9 +15,10 @@ mod tests {
         EncodedMultikey::try_from(s).unwrap().to_inner()
     }
 
-    /// Helper: returns a minimal valid WASM module (magic + version 1)
+    /// Helper: returns a minimal valid WASM component (magic + component
+    /// version)
     fn test_wasm_message() -> Vec<u8> {
-        vec![0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00]
+        vec![0x00, 0x61, 0x73, 0x6d, 0x0d, 0x00, 0x01, 0x00]
     }
 
     #[test]
@@ -59,42 +60,6 @@ mod tests {
             json.get("multisig").is_some(),
             "JSON should have 'multisig' field"
         );
-    }
-
-    #[cfg(not(feature = "dag_cbor"))]
-    #[test]
-    fn test_vlad_serde_cbor() {
-        let mk = test_signing_key();
-        let msg = test_wasm_message();
-
-        let vlad = vlad::Builder::default()
-            .with_signing_key(&mk)
-            .with_message(&msg)
-            .try_build()
-            .unwrap();
-
-        // roundtrip through CBOR
-        let v = multi_cbor::to_vec(&vlad).unwrap();
-        let deserialized: vlad::Vlad = multi_cbor::from_slice(&v).unwrap();
-        assert_eq!(vlad, deserialized);
-    }
-
-    #[cfg(feature = "dag_cbor")]
-    #[test]
-    fn test_vlad_serde_dag_cbor() {
-        let mk = test_signing_key();
-        let msg = test_wasm_message();
-
-        let vlad = vlad::Builder::default()
-            .with_signing_key(&mk)
-            .with_message(&msg)
-            .try_build()
-            .unwrap();
-
-        // roundtrip through CBOR (dag_cbor feature)
-        let v = multi_cbor::to_vec(&vlad).unwrap();
-        let deserialized: vlad::Vlad = multi_cbor::from_slice(&v).unwrap();
-        assert_eq!(vlad, deserialized);
     }
 
     #[test]
